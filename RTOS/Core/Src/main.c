@@ -69,7 +69,10 @@ void Task_Data(void const * argument);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-
+void log_data(char *buf)
+{
+  HAL_UART_Transmit(&huart3,(uint8_t*)buf, strlen(buf),100);
+}
 /* USER CODE END 0 */
 
 /**
@@ -291,7 +294,9 @@ void Task_Sensor(void const * argument)
   /* Infinite loop */
   for(;;)
   {
-    osDelay(1);
+    osDelay(1000);
+    log_data("task sensor");
+    osSemaphoreRelease(SensorSemHandle);
   }
   /* USER CODE END 5 */
 }
@@ -309,7 +314,12 @@ void Task_Servo(void const * argument)
   /* Infinite loop */
   for(;;)
   {
-    osDelay(1);
+    if(osSemaphoreWait(SensorSemHandle,osWaitForever)||osSemaphoreWait(DataSemHandle,osWaitForever))
+  {
+    log_data("task servo");
+    osSemaphoreRelease(ServoSemHandle);
+    osDelay(500);
+  }
   }
   /* USER CODE END Task_Servo */
 }

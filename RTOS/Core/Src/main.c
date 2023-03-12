@@ -145,7 +145,7 @@ int main(void)
   /* definition and creation of Task1 */
   osThreadDef(Task1, Task_Sensor, osPriorityHigh, 0, 128);
   Task1Handle = osThreadCreate(osThread(Task1), NULL);
-
+//Huy commit 
   /* definition and creation of Task2 */
   osThreadDef(Task2, Task_Servo, osPriorityAboveNormal, 0, 128);
   Task2Handle = osThreadCreate(osThread(Task2), NULL);
@@ -281,8 +281,10 @@ void Task_Sensor(void const * argument)
   /* Infinite loop */
   for(;;)
   {
-    osDelay(1);
+    log_data("task sensor");
+    osSemaphoreRelease(SensorSemHandle);
   }
+  osDelay(1000);
   /* USER CODE END 5 */
 }
 
@@ -299,7 +301,12 @@ void Task_Servo(void const * argument)
   /* Infinite loop */
   for(;;)
   {
-    osDelay(1);
+    if(osSemaphoreWait(SensorSemHandle,osWaitForever)||osSemaphoreWait(DataSemHandle,osWaitForever))
+  {
+    log_data("task servo");
+    osSemaphoreRelease(ServoSemHandle);
+    osDelay(500);
+  }
   }
   /* USER CODE END Task_Servo */
 }

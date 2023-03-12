@@ -142,7 +142,7 @@ int main(void)
   /* definition and creation of Task1 */
   osThreadDef(Task1, Task_Sensor, osPriorityHigh, 0, 128);
   Task1Handle = osThreadCreate(osThread(Task1), NULL);
-
+//Huy commit 
   /* definition and creation of Task2 */
   osThreadDef(Task2, Task_Servo, osPriorityAboveNormal, 0, 128);
   Task2Handle = osThreadCreate(osThread(Task2), NULL);

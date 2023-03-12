@@ -137,7 +137,20 @@ int main(void)
   /* USER CODE BEGIN RTOS_QUEUES */
   /* add queues, ... */
   /* USER CODE END RTOS_QUEUES */
-
+            // if (DHT11_Start())
+          // {
+          //   RHI = DHT11_Read(); // Relative humidity integral
+          //   RHD = DHT11_Read(); // Relative humidity decimal
+          //   TCI = DHT11_Read(); // Celsius integral
+          //   TCD = DHT11_Read(); // Celsius decimal
+          //   SUM = DHT11_Read(); // Check sum
+          //   if (RHI + RHD + TCI + TCD == SUM)
+          //   {
+          //     // Can use RHI and TCI for any purposes if whole number only needed
+          //     temp = (float)TCI + (float)(TCD / 10.0);
+          //     humi = (float)RHI + (float)(RHD / 10.0);
+          //     // Can use tCelsius, tFahrenheit and RH for any purposes
+          //   }
   /* Create the thread(s) */
   /* definition and creation of Task1 */
   osThreadDef(Task1, Task_Sensor, osPriorityHigh, 0, 128);

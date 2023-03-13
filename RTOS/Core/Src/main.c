@@ -1,20 +1,20 @@
 /* USER CODE BEGIN Header */
 /**
-  ******************************************************************************
-  * @file           : main.c
-  * @brief          : Main program body
-  ******************************************************************************
-  * @attention
-  *
-  * Copyright (c) 2023 STMicroelectronics.
-  * All rights reserved.
-  *
-  * This software is licensed under terms that can be found in the LICENSE file
-  * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
-  *
-  ******************************************************************************
-  */
+ ******************************************************************************
+ * @file           : main.c
+ * @brief          : Main program body
+ ******************************************************************************
+ * @attention
+ *
+ * Copyright (c) 2023 STMicroelectronics.
+ * All rights reserved.
+ *
+ * This software is licensed under terms that can be found in the LICENSE file
+ * in the root directory of this software component.
+ * If no LICENSE file comes with this software, it is provided AS-IS.
+ *
+ ******************************************************************************
+ */
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
@@ -23,6 +23,9 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "string.h"
+#include "stdio.h"
+#include "stdlib.h"
+#include "math.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -40,7 +43,7 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
- UART_HandleTypeDef huart3;
+UART_HandleTypeDef huart3;
 
 osThreadId Task1Handle;
 osThreadId Task2Handle;
@@ -51,17 +54,44 @@ osSemaphoreId ServoSemHandle;
 osSemaphoreId DataSemHandle;
 osSemaphoreId IRQSemHandle;
 /* USER CODE BEGIN PV */
+enum
+{
+  Mode_auto,
+  Mode_manual
+};
+volatile int Mode = Mode_auto;
 
+uint8_t Rx_data;
+char buffer_data[50] = {0};
+volatile int Rx_index = 0;
+
+//example
+int temp = 30;
+int humi = 90;
+
+char buf_sensor[20] = {0};
+char buf_temp[20] = {0};
+char buf_humi[20] = {0};
+
+int count = 25;
+char rota[20] = {0};
+char threshold[20] = {0};
+char label_thres[10] = {0};
+char str_thres[5] = {0};
+int angle;
+
+int PC_rota;
+float PC_threshold;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_USART3_UART_Init(void);
-void Task_Sensor(void const * argument);
-void Task_Servo(void const * argument);
-void Task_Display(void const * argument);
-void Task_Data(void const * argument);
+void Task_Sensor(void const *argument);
+void Task_Servo(void const *argument);
+void Task_Display(void const *argument);
+void Task_Data(void const *argument);
 
 /* USER CODE BEGIN PFP */
 
@@ -71,14 +101,42 @@ void Task_Data(void const * argument);
 /* USER CODE BEGIN 0 */
 void log_data(char *buf)
 {
-  HAL_UART_Transmit(&huart3, (uint8_t*)buf, strlen(buf),100);
+  HAL_UART_Transmit(&huart3, (uint8_t *)buf, strlen(buf), 100);
+}
+
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+  if (huart == &huart3)
+  {
+    if (Rx_data == 13)
+    {
+      buffer_data[Rx_index] = '\0';
+      Rx_index = 0;
+      if (strcmp(buffer_data, "manual") == 0)
+      {
+        Mode = Mode_manual;
+      }
+      if (strcmp(buffer_data, "auto") == 0)
+      {
+        Mode = Mode_auto;
+      }
+      osSemaphoreRelease(IRQSemHandle);
+    }
+    else
+    {
+      buffer_data[Rx_index] = (char)Rx_data;
+      Rx_index++;
+      // log_data((char*)Rx_data);
+    }
+    HAL_UART_Receive_IT(&huart3, &Rx_data, 1);
+  }
 }
 /* USER CODE END 0 */
 
 /**
-  * @brief  The application entry point.
-  * @retval int
-  */
+ * @brief  The application entry point.
+ * @retval int
+ */
 int main(void)
 {
   /* USER CODE BEGIN 1 */
@@ -105,7 +163,7 @@ int main(void)
   MX_GPIO_Init();
   MX_USART3_UART_Init();
   /* USER CODE BEGIN 2 */
-
+  HAL_UART_Receive_IT(&huart3, &Rx_data, 1);
   /* USER CODE END 2 */
 
   /* USER CODE BEGIN RTOS_MUTEX */
@@ -145,7 +203,7 @@ int main(void)
   /* definition and creation of Task1 */
   osThreadDef(Task1, Task_Sensor, osPriorityHigh, 0, 128);
   Task1Handle = osThreadCreate(osThread(Task1), NULL);
-//Huy commit 
+
   /* definition and creation of Task2 */
   osThreadDef(Task2, Task_Servo, osPriorityAboveNormal, 0, 128);
   Task2Handle = osThreadCreate(osThread(Task2), NULL);
@@ -161,10 +219,10 @@ int main(void)
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
   /* USER CODE END RTOS_THREADS */
-
+  log_data("start\n");
   /* Start scheduler */
   osKernelStart();
-
+  
   /* We should never get here as control is now taken by the scheduler */
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
@@ -178,17 +236,17 @@ int main(void)
 }
 
 /**
-  * @brief System Clock Configuration
-  * @retval None
-  */
+ * @brief System Clock Configuration
+ * @retval None
+ */
 void SystemClock_Config(void)
 {
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
   RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
 
   /** Initializes the RCC Oscillators according to the specified parameters
-  * in the RCC_OscInitTypeDef structure.
-  */
+   * in the RCC_OscInitTypeDef structure.
+   */
   RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
   RCC_OscInitStruct.HSEState = RCC_HSE_ON;
   RCC_OscInitStruct.HSEPredivValue = RCC_HSE_PREDIV_DIV1;
@@ -202,9 +260,8 @@ void SystemClock_Config(void)
   }
 
   /** Initializes the CPU, AHB and APB buses clocks
-  */
-  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
-                              |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
+   */
+  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK | RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2;
   RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
   RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
@@ -217,10 +274,10 @@ void SystemClock_Config(void)
 }
 
 /**
-  * @brief USART3 Initialization Function
-  * @param None
-  * @retval None
-  */
+ * @brief USART3 Initialization Function
+ * @param None
+ * @retval None
+ */
 static void MX_USART3_UART_Init(void)
 {
 
@@ -246,14 +303,13 @@ static void MX_USART3_UART_Init(void)
   /* USER CODE BEGIN USART3_Init 2 */
 
   /* USER CODE END USART3_Init 2 */
-
 }
 
 /**
-  * @brief GPIO Initialization Function
-  * @param None
-  * @retval None
-  */
+ * @brief GPIO Initialization Function
+ * @param None
+ * @retval None
+ */
 static void MX_GPIO_Init(void)
 {
 
@@ -261,7 +317,6 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOD_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
-
 }
 
 /* USER CODE BEGIN 4 */
@@ -270,62 +325,100 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN Header_Task_Sensor */
 /**
-  * @brief  Function implementing the Task1 thread.
-  * @param  argument: Not used
-  * @retval None
-  */
+ * @brief  Function implementing the Task1 thread.
+ * @param  argument: Not used
+ * @retval None
+ */
 /* USER CODE END Header_Task_Sensor */
-void Task_Sensor(void const * argument)
+void Task_Sensor(void const *argument)
 {
   /* USER CODE BEGIN 5 */
   /* Infinite loop */
-  for(;;)
+  for (;;)
   {
-    log_data("task sensor");
+    log_data("task sensor\n");
+    //read sensor
     osSemaphoreRelease(SensorSemHandle);
+    osDelay(1000);
   }
-  osDelay(1000);
+  
   /* USER CODE END 5 */
 }
 
 /* USER CODE BEGIN Header_Task_Servo */
 /**
-* @brief Function implementing the Task2 thread.
-* @param argument: Not used
-* @retval None
-*/
+ * @brief Function implementing the Task2 thread.
+ * @param argument: Not used
+ * @retval None
+ */
 /* USER CODE END Header_Task_Servo */
-void Task_Servo(void const * argument)
+void Task_Servo(void const *argument)
 {
   /* USER CODE BEGIN Task_Servo */
   /* Infinite loop */
-  for(;;)
+  for (;;)
   {
-    if(osSemaphoreWait(SensorSemHandle,osWaitForever)||osSemaphoreWait(DataSemHandle,osWaitForever))
-  {
-    log_data("task servo");
-    osSemaphoreRelease(ServoSemHandle);
+    if (osSemaphoreWait(SensorSemHandle, osWaitForever) == osOK|| osSemaphoreWait(DataSemHandle, osWaitForever)==osOK)
+    {
+      log_data("task servo\n");
+      if (Mode == Mode_auto)
+      {
+        log_data("task servo mode auto\n");
+        if (temp > 30)
+        {
+          TIM2->CCR1 = 25;
+          // sprintf(rota, "Rota: %d  ", 0);
+          // log_data(rota);
+          // log_data("\n");
+          // ST7735_WriteString(0, 3 * 10 * 3, rota, Font_11x18, ST7735_GREEN, ST7735_BLACK);
+        }
+        //>30C -> close curtain
+        else
+        {
+          TIM2->CCR1 = 125;
+          // sprintf(rota, "Rota: %d  ", 180);
+          // log_data(rota);
+          // log_data("\n");
+          // ST7735_WriteString(0, 3 * 10 * 3, rota, Font_11x18, ST7735_GREEN, ST7735_BLACK);
+        }
+      }
+      if (Mode == Mode_manual)
+      {
+        log_data("task servo mode manual\n");
+        TIM2->CCR1 = (int)((PC_rota + 45) / 1.8);
+      }
+      osSemaphoreRelease(ServoSemHandle);
+    }
     osDelay(500);
-  }
   }
   /* USER CODE END Task_Servo */
 }
 
 /* USER CODE BEGIN Header_Task_Display */
 /**
-* @brief Function implementing the Task3 thread.
-* @param argument: Not used
-* @retval None
-*/
+ * @brief Function implementing the Task3 thread.
+ * @param argument: Not used
+ * @retval None
+ */
 /* USER CODE END Header_Task_Display */
-void Task_Display(void const * argument)
+void Task_Display(void const *argument)
 {
   /* USER CODE BEGIN Task_Display */
   /* Infinite loop */
-  for(;;)
+  for (;;)
   {
-    osSemaphoreWait(ServoSemHandle,osWaitForever);
+    osSemaphoreWait(ServoSemHandle, osWaitForever);
     log_data("Task Display\n");
+    sprintf(buf_temp, "Temp: %d C", temp);
+    sprintf(buf_humi, "Humi: %d ", humi);
+    sprintf(rota, "Rota: %d  ", (int)(1.8*(TIM2->CCR1) - 45));
+    log_data(buf_temp);
+    log_data("\n");
+    log_data(buf_humi);
+    log_data("\n");
+    // ST7735_WriteString(0, 30, buf_temp, Font_11x18, ST7735_RED, ST7735_BLACK);
+    // ST7735_WriteString(0, 3 * 10 * 2, strcat(buf_humi, "%"), Font_11x18, ST7735_RED, ST7735_BLACK);
+    //ST7735_WriteString(0, 3 * 10 * 3, rota, Font_11x18, ST7735_GREEN, ST7735_BLACK);
     osDelay(500);
   }
   /* USER CODE END Task_Display */
@@ -333,36 +426,65 @@ void Task_Display(void const * argument)
 
 /* USER CODE BEGIN Header_Task_Data */
 /**
-* @brief Function implementing the Task4 thread.
-* @param argument: Not used
-* @retval None
-*/
+ * @brief Function implementing the Task4 thread.
+ * @param argument: Not used
+ * @retval None
+ */
 /* USER CODE END Header_Task_Data */
-void Task_Data(void const * argument)
+void Task_Data(void const *argument)
 {
   /* USER CODE BEGIN Task_Data */
   /* Infinite loop */
-  for(;;)
+  for (;;)
   {
+    osSemaphoreWait(IRQSemHandle, osWaitForever);
+    log_data("task uart\n");
+    if (strncmp(buffer_data, "Rota", 4) == 0)
+    {
+      log_data("check data rota\n");
+      // Parse string
+      sscanf(buffer_data, "%*[^0-9]%d", &PC_rota);
+      // // control Servo
+      sprintf(rota, "Rota: %d  \n", PC_rota);
+      log_data("\nPC control ");
+      log_data(rota);
+      // ST7735_WriteString(0, 3 * 10 * 3, rota, Font_11x18, ST7735_GREEN, ST7735_BLACK);
+    }
+    if (strncmp(buffer_data, "Threshold", strlen("Threshold")) == 0)
+    {
+      log_data("check data thresh\n");
+      char str_buf[] = "Thres: ";
+      // Parse string
+      sscanf(buffer_data, "%s%s", label_thres, str_thres);
+      // control Servo
+      PC_threshold = atof(str_thres);
+      strcat(str_buf, str_thres);
+      log_data("\nPC set Threshold: ");
+      log_data(str_thres);
+      // ST7735_WriteString(0, 3 * 10 * 4, str_buf, Font_11x18, ST7735_GREEN, ST7735_BLACK);
+    }
+    memset(buffer_data, '\0', sizeof(buffer_data));
+    osSemaphoreRelease(DataSemHandle);
     osDelay(1);
   }
   /* USER CODE END Task_Data */
 }
 
 /**
-  * @brief  Period elapsed callback in non blocking mode
-  * @note   This function is called  when TIM1 interrupt took place, inside
-  * HAL_TIM_IRQHandler(). It makes a direct call to HAL_IncTick() to increment
-  * a global variable "uwTick" used as application time base.
-  * @param  htim : TIM handle
-  * @retval None
-  */
+ * @brief  Period elapsed callback in non blocking mode
+ * @note   This function is called  when TIM1 interrupt took place, inside
+ * HAL_TIM_IRQHandler(). It makes a direct call to HAL_IncTick() to increment
+ * a global variable "uwTick" used as application time base.
+ * @param  htim : TIM handle
+ * @retval None
+ */
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
   /* USER CODE BEGIN Callback 0 */
 
   /* USER CODE END Callback 0 */
-  if (htim->Instance == TIM1) {
+  if (htim->Instance == TIM1)
+  {
     HAL_IncTick();
   }
   /* USER CODE BEGIN Callback 1 */
@@ -371,9 +493,9 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 }
 
 /**
-  * @brief  This function is executed in case of error occurrence.
-  * @retval None
-  */
+ * @brief  This function is executed in case of error occurrence.
+ * @retval None
+ */
 void Error_Handler(void)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
@@ -385,14 +507,14 @@ void Error_Handler(void)
   /* USER CODE END Error_Handler_Debug */
 }
 
-#ifdef  USE_FULL_ASSERT
+#ifdef USE_FULL_ASSERT
 /**
-  * @brief  Reports the name of the source file and the source line number
-  *         where the assert_param error has occurred.
-  * @param  file: pointer to the source file name
-  * @param  line: assert_param error line source number
-  * @retval None
-  */
+ * @brief  Reports the name of the source file and the source line number
+ *         where the assert_param error has occurred.
+ * @param  file: pointer to the source file name
+ * @param  line: assert_param error line source number
+ * @retval None
+ */
 void assert_failed(uint8_t *file, uint32_t line)
 {
   /* USER CODE BEGIN 6 */

@@ -72,9 +72,9 @@ uint8_t Rx_data;
 char buffer_data[50] = {0};
 volatile int Rx_index = 0;
 
-//example
-int temp = 30;
-int humi = 90;
+// example
+int temp;
+int humi;
 
 char buf_sensor[20] = {0};
 char buf_temp[20] = {0};
@@ -88,7 +88,13 @@ char str_thres[5] = {0};
 int angle;
 
 int PC_rota;
-float PC_threshold;
+float PC_threshold=30;
+
+char thres_tring[] = "Thres: 30";
+uint8_t RHI, RHD, TCI, TCD, SUM;
+float tCelsius = 0;
+float tFahrenheit = 0;
+float RH = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -129,6 +135,16 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
       if (strcmp(buffer_data, "auto") == 0)
       {
         Mode = Mode_auto;
+      }
+      if (strncmp(buffer_data, "Rota", 4) == 0)
+      {
+        // Parse string
+        sscanf(buffer_data, "%*[^0-9]%d", &PC_rota);
+      }
+      if (strncmp(buffer_data, "Threshold", strlen("Threshold")) == 0)
+      {
+        log_data("check data thresh\n");
+        sscanf(buffer_data, "%s%s", label_thres, str_thres);
       }
       osSemaphoreRelease(IRQSemHandle);
     }
@@ -177,6 +193,17 @@ int main(void)
   MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
   HAL_UART_Receive_IT(&huart3, &Rx_data, 1);
+  HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
+  ST7735_Init();
+  HAL_TIM_Base_Start(&htim2);
+  ST7735_FillScreen(ST7735_BLACK);
+  ST7735_WriteString(25, 0, "Team 17", Font_11x18, ST7735_RED, ST7735_BLACK);
+  ST7735_WriteString(0, 30, "Temp: ", Font_11x18, ST7735_RED, ST7735_BLACK);
+  ST7735_WriteString(0, 3 * 10 * 2, "Humi: ", Font_11x18, ST7735_RED, ST7735_BLACK);
+  ST7735_WriteString(0, 3 * 10 * 3, "Rota: ", Font_11x18, ST7735_GREEN, ST7735_BLACK);
+  // sprintf(thres_tring,"Thresh: %.1f",PC_threshold);
+  // strcat(thres_tring,"30");
+  ST7735_WriteString(0, 3 * 10 * 4, thres_tring, Font_11x18, ST7735_GREEN, ST7735_BLACK);
   /* USER CODE END 2 */
 
   /* USER CODE BEGIN RTOS_MUTEX */
@@ -339,15 +366,14 @@ static void MX_TIM2_Init(void)
 
   TIM_ClockConfigTypeDef sClockSourceConfig = {0};
   TIM_MasterConfigTypeDef sMasterConfig = {0};
-  TIM_OC_InitTypeDef sConfigOC = {0};
 
   /* USER CODE BEGIN TIM2_Init 1 */
 
   /* USER CODE END TIM2_Init 1 */
   htim2.Instance = TIM2;
-  htim2.Init.Prescaler = 1444-1;
+  htim2.Init.Prescaler = 72-1;
   htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim2.Init.Period = 1000-1;
+  htim2.Init.Period = 65535;
   htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
@@ -359,28 +385,15 @@ static void MX_TIM2_Init(void)
   {
     Error_Handler();
   }
-  if (HAL_TIM_PWM_Init(&htim2) != HAL_OK)
-  {
-    Error_Handler();
-  }
   sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
   sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
   if (HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig) != HAL_OK)
   {
     Error_Handler();
   }
-  sConfigOC.OCMode = TIM_OCMODE_PWM1;
-  sConfigOC.Pulse = 0;
-  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
-  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
-  if (HAL_TIM_PWM_ConfigChannel(&htim2, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
-  {
-    Error_Handler();
-  }
   /* USER CODE BEGIN TIM2_Init 2 */
 
   /* USER CODE END TIM2_Init 2 */
-  HAL_TIM_MspPostInit(&htim2);
 
 }
 
@@ -398,14 +411,15 @@ static void MX_TIM3_Init(void)
 
   TIM_ClockConfigTypeDef sClockSourceConfig = {0};
   TIM_MasterConfigTypeDef sMasterConfig = {0};
+  TIM_OC_InitTypeDef sConfigOC = {0};
 
   /* USER CODE BEGIN TIM3_Init 1 */
 
   /* USER CODE END TIM3_Init 1 */
   htim3.Instance = TIM3;
-  htim3.Init.Prescaler = 72-1;
+  htim3.Init.Prescaler = 1444-1;
   htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim3.Init.Period = 65535;
+  htim3.Init.Period = 1000-1;
   htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim3) != HAL_OK)
@@ -417,15 +431,28 @@ static void MX_TIM3_Init(void)
   {
     Error_Handler();
   }
+  if (HAL_TIM_PWM_Init(&htim3) != HAL_OK)
+  {
+    Error_Handler();
+  }
   sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
   sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
   if (HAL_TIMEx_MasterConfigSynchronization(&htim3, &sMasterConfig) != HAL_OK)
   {
     Error_Handler();
   }
+  sConfigOC.OCMode = TIM_OCMODE_PWM1;
+  sConfigOC.Pulse = 0;
+  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
+  if (HAL_TIM_PWM_ConfigChannel(&htim3, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
+  {
+    Error_Handler();
+  }
   /* USER CODE BEGIN TIM3_Init 2 */
 
   /* USER CODE END TIM3_Init 2 */
+  HAL_TIM_MspPostInit(&htim3);
 
 }
 
@@ -516,11 +543,26 @@ void Task_Sensor(void const * argument)
   for (;;)
   {
     log_data("task sensor\n");
-    //read sensor
+    // read sensor
+    if (DHT11_Start())
+    {
+      RHI = DHT11_Read(); // Relative humidity integral
+      RHD = DHT11_Read(); // Relative humidity decimal
+      TCI = DHT11_Read(); // Celsius integral
+      TCD = DHT11_Read(); // Celsius decimal
+      SUM = DHT11_Read(); // Check sum
+      if (RHI + RHD + TCI + TCD == SUM)
+      {
+        // Can use RHI and TCI for any purposes if whole number only needed
+        temp = (float)TCI + (float)(TCD / 10.0);
+        humi = (float)RHI + (float)(RHD / 10.0);
+        // Can use tCelsius, tFahrenheit and RH for any purposes
+      }
+    }
     osSemaphoreRelease(SensorSemHandle);
     osDelay(1000);
   }
-  
+
   /* USER CODE END 5 */
 }
 
@@ -537,34 +579,30 @@ void Task_Servo(void const * argument)
   /* Infinite loop */
   for (;;)
   {
-    if (osSemaphoreWait(SensorSemHandle, osWaitForever) == osOK|| osSemaphoreWait(DataSemHandle, osWaitForever)==osOK)
+    if (osSemaphoreWait(SensorSemHandle, osWaitForever) == osOK || osSemaphoreWait(DataSemHandle, osWaitForever) == osOK)
     {
       log_data("task servo\n");
       if (Mode == Mode_auto)
       {
         log_data("task servo mode auto\n");
-        if (temp > 30)
+        if (temp > PC_threshold)
         {
-          TIM2->CCR1 = 25;
-          // sprintf(rota, "Rota: %d  ", 0);
-          // log_data(rota);
-          // log_data("\n");
-          ST7735_WriteString(0, 3 * 10 * 3, rota, Font_11x18, ST7735_GREEN, ST7735_BLACK);
+          TIM3->CCR1 = 25;
+          PC_rota = 0;
+          //ST7735_WriteString(0, 3 * 10 * 3, rota, Font_11x18, ST7735_GREEN, ST7735_BLACK);
         }
         //>30C -> close curtain
         else
         {
-          TIM2->CCR1 = 125;
-          // sprintf(rota, "Rota: %d  ", 180);
-          // log_data(rota);
-          // log_data("\n");
-          ST7735_WriteString(0, 3 * 10 * 3, rota, Font_11x18, ST7735_GREEN, ST7735_BLACK);
+          TIM3->CCR1 = 125;
+          PC_rota = 180;
+          //ST7735_WriteString(0, 3 * 10 * 3, rota, Font_11x18, ST7735_GREEN, ST7735_BLACK);
         }
       }
       if (Mode == Mode_manual)
       {
         log_data("task servo mode manual\n");
-        TIM2->CCR1 = (int)((PC_rota + 45) / 1.8);
+        TIM3->CCR1 = (int)((PC_rota + 45) / 1.8);
       }
       osSemaphoreRelease(ServoSemHandle);
     }
@@ -590,11 +628,25 @@ void Task_Display(void const * argument)
     log_data("Task Display\n");
     sprintf(buf_temp, "Temp: %d C", temp);
     sprintf(buf_humi, "Humi: %d ", humi);
-    sprintf(rota, "Rota: %d  ", (int)(1.8*(TIM2->CCR1) - 45));
     log_data(buf_temp);
     log_data("\n");
     log_data(buf_humi);
     log_data("\n");
+    if (temp > PC_threshold)
+    {
+      sprintf(rota, "Rota: %d  ", 0);
+      log_data(rota);
+      log_data("\n");
+      ST7735_WriteString(35, 145, "Warnning", Font_7x10, ST7735_WHITE, ST7735_BLACK);
+    }
+    else
+    {
+      sprintf(rota, "Rota: %d  ", 180);
+      log_data(rota);
+      log_data("\n");
+      ST7735_WriteString(35, 145, "          ", Font_7x10, ST7735_WHITE, ST7735_BLACK);
+    }
+    sprintf(rota, "Rota: %d  ", PC_rota);
     ST7735_WriteString(0, 30, buf_temp, Font_11x18, ST7735_RED, ST7735_BLACK);
     ST7735_WriteString(0, 3 * 10 * 2, strcat(buf_humi, "%"), Font_11x18, ST7735_RED, ST7735_BLACK);
     ST7735_WriteString(0, 3 * 10 * 3, rota, Font_11x18, ST7735_GREEN, ST7735_BLACK);
@@ -622,29 +674,29 @@ void Task_Data(void const * argument)
     {
       log_data("check data rota\n");
       // Parse string
-      sscanf(buffer_data, "%*[^0-9]%d", &PC_rota);
-      // // control Servo
-      sprintf(rota, "Rota: %d  \n", PC_rota);
+      //sscanf(buffer_data, "%*[^0-9]%d", &PC_rota);
+      // control Servo
+      sprintf(rota, "Rota: %d  ", PC_rota);
       log_data("\nPC control ");
       log_data(rota);
-      // ST7735_WriteString(0, 3 * 10 * 3, rota, Font_11x18, ST7735_GREEN, ST7735_BLACK);
+      ST7735_WriteString(0, 3 * 10 * 3, rota, Font_11x18, ST7735_GREEN, ST7735_BLACK);
     }
     if (strncmp(buffer_data, "Threshold", strlen("Threshold")) == 0)
     {
       log_data("check data thresh\n");
       char str_buf[] = "Thres: ";
       // Parse string
-      sscanf(buffer_data, "%s%s", label_thres, str_thres);
+      //sscanf(buffer_data, "%s%s", label_thres, str_thres);
       // control Servo
       PC_threshold = atof(str_thres);
       strcat(str_buf, str_thres);
       log_data("\nPC set Threshold: ");
       log_data(str_thres);
-      // ST7735_WriteString(0, 3 * 10 * 4, str_buf, Font_11x18, ST7735_GREEN, ST7735_BLACK);
+      ST7735_WriteString(0, 3 * 10 * 4, str_buf, Font_11x18, ST7735_GREEN, ST7735_BLACK);
     }
     memset(buffer_data, '\0', sizeof(buffer_data));
     osSemaphoreRelease(DataSemHandle);
-    osDelay(1);
+    osDelay(500);
   }
   /* USER CODE END Task_Data */
 }

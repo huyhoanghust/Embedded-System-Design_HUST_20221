@@ -1,9 +1,5 @@
 {
     "files.associations": {
-        "dht22.h": "c",
-        "cmsis_os.h": "c",
-        "main.h": "c",
-        "freertos.h": "c",
-        "portable.h": "c"
+        "cmsis_os.h": "c"
     }
 }
